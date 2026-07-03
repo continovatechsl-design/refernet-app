@@ -1,0 +1,145 @@
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore'
+import { db } from '../firebase'
+import { useAuth } from '../context/AuthContext'
+import { enablePushNotifications } from '../utils/notifications'
+import StatusBadge from '../components/StatusBadge'
+
+function RequestRow({ r }) {
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-black/[0.06] last:border-0">
+      <div>
+        <p className="text-sm font-medium">{r.customerName}</p>
+        <p className="text-xs text-ink/45">{r.category} · {r.customerNumber}</p>
+      </div>
+      <div className="flex items-center gap-3">
+        {r.status === 'completed' && r.pointsAwarded != null && (
+          <span className="font-mono text-xs text-brand-600">+{r.pointsAwarded} pts</span>
+        )}
+        <StatusBadge status={r.status} />
+      </div>
+    </div>
+  )
+}
+
+export default function Dashboard() {
+  const { user, profile } = useAuth()
+  const [referred, setReferred] = useState([])
+  const [own, setOwn] = useState([])
+  const [copiedCode, setCopiedCode] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
+  const [pushState, setPushState] = useState('idle')
+
+  useEffect(() => {
+    if (!user) return
+    const q1 = query(
+      collection(db, 'requests'),
+      where('referrerUid', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    )
+    const q2 = query(
+      collection(db, 'requests'),
+      where('submittedByUid', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    )
+    const unsub1 = onSnapshot(q1, (snap) => setReferred(snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+    const unsub2 = onSnapshot(q2, (snap) => setOwn(snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+    return () => {
+      unsub1()
+      unsub2()
+    }
+  }, [user])
+
+  const referralLink = profile ? `${window.location.origin}/ref/${profile.referralCode}` : ''
+
+  const copyCode = () => {
+    navigator.clipboard.writeText(profile?.referralCode || '')
+    setCopiedCode(true)
+    setTimeout(() => setCopiedCode(false), 1500)
+  }
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(referralLink)
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 1500)
+  }
+
+  const handleEnablePush = async () => {
+    setPushState('requesting')
+    const res = await enablePushNotifications(user.uid)
+    setPushState(res.ok ? 'enabled' : 'failed')
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-5 py-10">
+      <div className="grid md:grid-cols-3 gap-6 mb-10">
+        <div className="card p-6 md:col-span-1">
+          <p className="eyebrow mb-2">Points balance</p>
+          <p className="font-display text-4xl">{profile?.points ?? 0}</p>
+          <p className="text-xs text-ink/45 mt-1">Contact admin to redeem for LKR</p>
+        </div>
+
+        <div className="card p-6 md:col-span-2">
+          <p className="eyebrow mb-2">Your referral ID</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-2xl font-mono tracking-[0.2em] bg-brand-50 border border-brand-100 rounded-sm px-3 py-2.5 text-center text-brand-700">
+              {profile?.referralCode || '——————'}
+            </code>
+            <button onClick={copyCode} className="btn-ghost flex-shrink-0">
+              {copiedCode ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <p className="text-xs text-ink/45 mt-2">
+            Give this ID to anyone who needs a job done — they enter it when submitting a request, and you earn points once it's completed.
+          </p>
+
+          <details className="mt-4">
+            <summary className="text-xs text-brand-600 cursor-pointer hover:underline">Prefer sharing a link instead?</summary>
+            <div className="flex items-center gap-2 mt-2">
+              <code className="flex-1 text-sm bg-brand-50 border border-brand-100 rounded-sm px-3 py-2.5 truncate font-mono">
+                {referralLink}
+              </code>
+              <button onClick={copyLink} className="btn-ghost flex-shrink-0">
+                {copiedLink ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </details>
+
+          {pushState !== 'enabled' && (
+            <button onClick={handleEnablePush} className="text-xs text-brand-600 hover:underline mt-4">
+              {pushState === 'requesting' ? 'Requesting…' : 'Enable notifications'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-display text-xl">Jobs from your referrals</h2>
+        <Link to="/submit-request" className="btn-primary !py-2 !px-3.5 text-sm">
+          + New request
+        </Link>
+      </div>
+      <div className="card p-5 mb-10">
+        {referred.length === 0 ? (
+          <p className="text-sm text-ink/45 py-6 text-center">
+            No referred jobs yet — share your link to get started.
+          </p>
+        ) : (
+          referred.map((r) => <RequestRow key={r.id} r={r} />)
+        )}
+      </div>
+
+      {own.length > 0 && (
+        <>
+          <h2 className="font-display text-xl mb-4">Requests you submitted directly</h2>
+          <div className="card p-5">
+            {own.map((r) => (
+              <RequestRow key={r.id} r={r} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
