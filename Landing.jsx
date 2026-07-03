@@ -1,78 +1,81 @@
-// Short, human-friendly referral codes (avoids ambiguous chars like 0/O/1/I)
-const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+import { initializeApp } from 'firebase/app'
+import { getAuth, GoogleAuthProvider } from 'firebase/auth'
+import { getFirestore } from 'firebase/firestore'
+import { getMessaging, isSupported } from 'firebase/messaging'
+import { getStorage } from 'firebase/storage'
 
-export function generateReferralCode(length = 6) {
-  let code = ''
-  for (let i = 0; i < length; i++) {
-    code += ALPHABET[Math.floor(Math.random() * ALPHABET.length)]
-  }
-  return code
+// 1. Go to https://console.firebase.google.com -> create a project
+// 2. Project settings -> General -> "Your apps" -> Web app -> copy the config below
+// 3. Paste your real values into .env.local (see .env.example) — do NOT hardcode here
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-export const REF_STORAGE_KEY = 'refnet_pending_referral_code'
+export const app = initializeApp(firebaseConfig)
+export const auth = getAuth(app)
+export const db = getFirestore(app)
+export const storage = getStorage(app)
+export const googleProvider = new GoogleAuthProvider()
 
-export function stashReferralCode(code) {
-  if (code) sessionStorage.setItem(REF_STORAGE_KEY, code)
+// Lazily-resolved messaging instance (FCM doesn't work in every browser/context)
+export const getMessagingIfSupported = async () => {
+  const supported = await isSupported().catch(() => false)
+  return supported ? getMessaging(app) : null
 }
 
-export function popReferralCode() {
-  const code = sessionStorage.getItem(REF_STORAGE_KEY)
-  sessionStorage.removeItem(REF_STORAGE_KEY)
-  return code
+// --- App-wide constants -----------------------------------------------
+
+// Whitelisted admin emails. Add the Google account(s) that should see the
+// admin dashboard. Mirror this list in firestore.rules so it's enforced
+// server-side too, not just hidden in the UI.
+export const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || '')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean)
+
+export const SERVICE_CATEGORIES = [
+  'Power Electrical',
+  'CCTV',
+  'Solar',
+  'House Automation',
+  'Building Construction',
+  'Industrial Automation',
+]
+
+// Full job lifecycle:
+// pending -> quoted (quotation PDF uploaded) -> accepted (customer said OK,
+// confirmed by admin) -> invoiced (invoice PDF uploaded) -> paid (invoice
+// paid, referrer points credited, payout countdown starts) -> completed
+// (admin has paid the referrer out). "rejected" can happen from pending or
+// quoted, if the customer never confirms.
+export const REQUEST_STATUS = {
+  PENDING: 'pending',
+  QUOTED: 'quoted',
+  ACCEPTED: 'accepted',
+  INVOICED: 'invoiced',
+  PAID: 'paid',
+  COMPLETED: 'completed',
+  REJECTED: 'rejected',
 }
 
-// --- Monthly tiered points calculation ---------------------------------
+// Referrer payouts are due this many days after the invoice is marked paid.
+export const PAYOUT_DUE_DAYS = 7
 
-// "2026-07" style key for the calendar month a Date falls in — used as
-// (part of) the doc ID that tracks each referrer's points-earned-this-month.
-export function getMonthKey(date = new Date()) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}`
-}
-
-// Given a rupee amount and how many points the referrer has already earned
-// this calendar month, returns how many points *this* amount earns —
-// applying the normal rate up to the monthly threshold, then the bonus
-// rate on whatever amount pushes them past it. Rounded to 2 decimals to
-// avoid floating point dust.
-export function calculateTieredPoints(
-  amount,
-  cumulativePointsThisMonth,
-  {
-    normalRate = 0.08,
-    bonusRate = 0.10,
-    threshold = 100,
-    pointValueLkr = 1000,
-  } = {}
-) {
-  const amt = Number(amount) || 0
-  const cumulative = Number(cumulativePointsThisMonth) || 0
-
-  if (amt <= 0) return 0
-
-  // Already past the threshold before this invoice — the whole thing is
-  // at the bonus rate.
-  if (cumulative >= threshold) {
-    return round2((amt * bonusRate) / pointValueLkr)
-  }
-
-  const pointsAtNormalRate = (amt * normalRate) / pointValueLkr
-
-  // Doesn't cross the threshold — all at the normal rate.
-  if (cumulative + pointsAtNormalRate <= threshold) {
-    return round2(pointsAtNormalRate)
-  }
-
-  // Crosses the threshold partway through this invoice — split it.
-  const remainingCapacityPoints = threshold - cumulative
-  const amountForRemainingCapacity = (remainingCapacityPoints * pointValueLkr) / normalRate
-  const remainingAmount = amt - amountForRemainingCapacity
-  const bonusPoints = (remainingAmount * bonusRate) / pointValueLkr
-
-  return round2(remainingCapacityPoints + bonusPoints)
-}
-
-function round2(n) {
-  return Math.round(n * 100) / 100
-}
+// --- Points calculation (tiered, monthly) ------------------------------
+// Points are auto-calculated from the invoice/quotation amount:
+//  - Normal rate: 8% of the amount, converted to points at 1 point = LKR 1000.
+//  - Once a referrer's total points earned *within the current calendar
+//    month* crosses 100, the portion of amount that pushes them past 100
+//    is calculated at a bonus 10% rate instead. It's a partial split, not
+//    all-or-nothing — e.g. if they're at 95 points and a new invoice would
+//    take them to 110, the first 5 points' worth of amount is at 8% and the
+//    rest is at 10%.
+export const POINT_VALUE_LKR = 1000
+export const POINTS_NORMAL_RATE = 0.08
+export const POINTS_BONUS_RATE = 0.10
+export const POINTS_BONUS_THRESHOLD = 100

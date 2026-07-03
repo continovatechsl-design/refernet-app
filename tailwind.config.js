@@ -1,18 +1,33 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ReferNet — Referral Marketing</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"
-      rel="stylesheet"
-    />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,jsx}'],
+  theme: {
+    extend: {
+      colors: {
+        ink: '#12181B',
+        paper: '#F6F4EF',
+        brand: {
+          50: '#EFF6F6',
+          100: '#D8EBEA',
+          400: '#3E8E88',
+          500: '#276C67',
+          600: '#1D524E',
+          700: '#153B38',
+        },
+        amber: {
+          400: '#E3A138',
+          500: '#C9821F',
+        },
+      },
+      fontFamily: {
+        display: ['"Fraunces"', 'serif'],
+        sans: ['"Inter"', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+      },
+      borderRadius: {
+        sm: '6px',
+      },
+    },
+  },
+  plugins: [],
+}

@@ -1,17 +1,6 @@
-{
-  "hosting": {
-    "public": "dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
   },
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
-  "storage": {
-    "rules": "storage.rules"
-  },
-  "functions": [
-    { "source": "functions", "codebase": "default" }
-  ]
 }

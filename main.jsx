@@ -1,45 +1,52 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
-@layer base {
-  html {
-    background: #F6F4EF;
-  }
-  body {
-    @apply font-sans text-ink antialiased;
-  }
-  h1, h2, h3 {
-    @apply font-display;
-  }
-}
+export default function Navbar() {
+  const { user, profile, isAdmin, signOutUser } = useAuth()
+  const navigate = useNavigate()
 
-@layer components {
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-sm px-4 py-2.5 text-sm font-medium transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed;
-  }
-  .btn-primary {
-    @apply btn bg-brand-600 text-paper hover:bg-brand-700;
-  }
-  .btn-ghost {
-    @apply btn bg-transparent text-brand-600 hover:bg-brand-50 border border-brand-100;
-  }
-  .card {
-    @apply bg-white border border-black/[0.06] rounded-sm shadow-[0_1px_2px_rgba(18,24,27,0.04)];
-  }
-  .input {
-    @apply w-full rounded-sm border border-black/10 bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink/35 focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400;
-  }
-  .label {
-    @apply block text-xs font-medium uppercase tracking-wide text-ink/50 mb-1.5;
-  }
-  .eyebrow {
-    @apply text-xs font-mono uppercase tracking-[0.14em] text-brand-500;
-  }
-  .circuit-rule {
-    @apply relative h-px w-full bg-black/10;
-  }
-  .badge {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
-  }
+  return (
+    <header className="border-b border-black/[0.06] bg-paper/90 backdrop-blur sticky top-0 z-20">
+      <div className="max-w-5xl mx-auto px-5 h-16 flex items-center justify-between">
+        <Link to={user ? '/dashboard' : '/'} className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shadow-[0_0_0_4px_rgba(227,161,56,0.18)]" />
+          <span className="font-display text-lg tracking-tight">ReferNet</span>
+        </Link>
+
+        {user && (
+          <nav className="flex items-center gap-1">
+            <Link to="/dashboard" className="btn-ghost !border-0 !px-3">
+              Dashboard
+            </Link>
+            <Link to="/submit-request" className="btn-ghost !border-0 !px-3">
+              New request
+            </Link>
+            {isAdmin && (
+              <Link to="/admin" className="btn-ghost !border-0 !px-3">
+                Admin
+              </Link>
+            )}
+            <div className="w-px h-5 bg-black/10 mx-1.5" />
+            {profile?.photoURL && (
+              <img
+                src={profile.photoURL}
+                alt=""
+                className="h-8 w-8 rounded-full border border-black/10"
+                referrerPolicy="no-referrer"
+              />
+            )}
+            <button
+              onClick={async () => {
+                await signOutUser()
+                navigate('/')
+              }}
+              className="btn-ghost !border-0 !px-3 text-ink/50"
+            >
+              Sign out
+            </button>
+          </nav>
+        )}
+      </div>
+    </header>
+  )
 }
